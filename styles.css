@@ -549,6 +549,22 @@ body.home-active .home-screen {
   color: var(--red);
 }
 
+.quote-card.unavailable {
+  opacity: 0.86;
+}
+
+.quote-card.unavailable .quote-price {
+  color: var(--muted);
+  font-size: clamp(1.8rem, 5vw, 2.5rem);
+}
+
+.quote-source {
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
 .card-open-button {
   background: rgba(255, 255, 255, 0.055);
   border: 1px solid var(--line);

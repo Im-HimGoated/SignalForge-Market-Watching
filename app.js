@@ -179,15 +179,17 @@ async function renderQuotes() {
   let rising = 0;
   let falling = 0;
   quotes.forEach((quote) => {
-    if (quote.change >= 0) rising += 1;
-    else falling += 1;
+    if (quote.available && quote.change >= 0) rising += 1;
+    else if (quote.available) falling += 1;
     quoteGrid.append(createQuoteCard(quote));
   });
 
   selectedCount.textContent = selected.size.toString();
   upCount.textContent = rising.toString();
   downCount.textContent = falling.toString();
-  dataStatus.textContent = quotes.some((quote) => quote.demo) ? "Demo" : "Live";
+  const availableCount = quotes.filter((quote) => quote.available).length;
+  dataStatus.textContent =
+    availableCount === quotes.length ? "Fetched" : availableCount > 0 ? "Partial" : "Unavailable";
 }
 
 async function loadQuote(company) {
@@ -199,7 +201,7 @@ async function loadQuote(company) {
     quoteCache.set(company.symbol, quote);
     return quote;
   } catch {
-    const quote = makeDemoQuote(company);
+    const quote = makeUnavailableQuote(company);
     quoteCache.set(company.symbol, quote);
     return quote;
   }
@@ -208,6 +210,10 @@ async function loadQuote(company) {
 async function runScenario() {
   const company = companies.find((item) => item.symbol === scenarioCompany.value) || companies[0];
   const quote = await loadQuote(company);
+  if (!quote.available) {
+    renderUnavailableScenario(quote);
+    return;
+  }
   const amount = Math.max(0, Number(scenarioAmount.value) || 0);
   const portion = Math.max(0, Number(scenarioPortion.value) || 0);
   const movePercent = Number(scenarioMove.value) || 0;
@@ -260,6 +266,24 @@ async function runScenario() {
     risk,
     timeframe: scenarioTimeframe.value,
   });
+}
+
+function renderUnavailableScenario(quote) {
+  latestScenario = null;
+  scenarioMoveLabel.textContent = `${Number(scenarioMove.value) > 0 ? "+" : ""}${Number(scenarioMove.value) || 0}%`;
+  scenarioPrice.textContent = "Unavailable";
+  scenarioPortionCost.textContent = "--";
+  scenarioUnits.textContent = "--";
+  scenarioValue.textContent = "--";
+  scenarioGain.textContent = "--";
+  scenarioGain.className = "";
+  scenarioProjectedPrice.textContent = "--";
+  riskLabel.textContent = "Unavailable";
+  riskFill.style.width = "0%";
+  riskFill.className = "low";
+  riskReason.textContent = "The quote source did not return a usable price, so risk cannot be calculated.";
+  outcomeGrid.innerHTML = `<div class="empty-state compact-empty">Outcome range needs a fetched quote first.</div>`;
+  aiSummary.textContent = `${quote.name} could not be loaded from ${quote.source}. To keep Market Watch accurate, the app is not substituting generated demo prices. Try Refresh, check the symbol later, or use another company.`;
 }
 
 function calculateOutcomeRange({ quote, amount, modeledUnits, movePercent }) {
@@ -354,7 +378,7 @@ async function runCompare() {
   const quotes = await Promise.all(
     activeSymbols.map((symbol) => loadQuote(companies.find((company) => company.symbol === symbol))),
   );
-  const rows = quotes.map((quote) => {
+  const rows = quotes.filter((quote) => quote.available).map((quote) => {
     const units = quote.price > 0 ? amount / quote.price : 0;
     const projectedPrice = quote.price * (1 + movePercent / 100);
     const projectedValue = units * projectedPrice;
@@ -373,7 +397,7 @@ function calculateRisk({ quote, movePercent, gainLoss, amount }) {
   const volatility = estimateVolatility(quote.sparkline);
   const moveRisk = Math.min(42, Math.abs(movePercent) * 1.15);
   const downsideRisk = gainLoss < 0 && amount > 0 ? Math.min(34, (Math.abs(gainLoss) / amount) * 100 * 1.25) : 0;
-  const dataRisk = quote.demo ? 8 : 0;
+  const dataRisk = 0;
   const score = Math.round(clamp(18 + volatility * 1.7 + moveRisk + downsideRisk + dataRisk, 0, 100));
   const label = score >= 72 ? "High" : score >= 42 ? "Moderate" : "Low";
   const tone = score >= 72 ? "high" : score >= 42 ? "moderate" : "low";
@@ -402,9 +426,7 @@ function createAiSummary(result) {
       : Math.abs(result.movePercent) >= 10
         ? "a meaningful"
         : "a modest";
-  const dataNote = result.quote.demo
-    ? "This is using demo fallback quote data, so treat it as a layout and math preview."
-    : "This is using the latest quote returned by the data source.";
+  const dataNote = `Quote source: ${result.quote.source}. Last quote timestamp: ${result.quote.asOf}.`;
   return `${result.quote.name} is modeled at ${money(result.quote.price)} per share. A ${result.portion.toFixed(
     3,
   )} portion would cost ${money(result.portionCost)}, while ${money(result.amount)} represents about ${result.modeledUnits.toFixed(
@@ -498,32 +520,27 @@ async function fetchStooqQuote(company) {
     changePercent,
     sparkline: makeSparkline(open, close, high, low, company.symbol, activeRange),
     loadedAt: Date.now(),
-    demo: false,
+    asOf: formatQuoteTimestamp(row.date, row.time),
+    source: "Stooq",
+    available: true,
   };
 }
 
-function makeDemoQuote(company) {
-  const seed = [...company.symbol].reduce((total, letter) => total + letter.charCodeAt(0), 0);
-  const phase = Date.now() / 120_000 + seed;
-  const base = 80 + (seed % 260);
-  const drift = Math.sin(phase) * 6 + Math.cos(phase * 0.65) * 3;
-  const open = base + Math.sin(seed) * 8;
-  const price = Math.max(2, open + drift);
-  const high = Math.max(open, price) + 2 + (seed % 8);
-  const low = Math.min(open, price) - 2 - (seed % 5);
-  const change = price - open;
+function makeUnavailableQuote(company) {
   return {
     ...company,
-    price,
-    open,
-    high,
-    low,
-    volume: 1_000_000 + seed * 13_579,
-    change,
-    changePercent: (change / open) * 100,
-    sparkline: makeSparkline(open, price, high, low, company.symbol, activeRange),
+    price: null,
+    open: null,
+    high: null,
+    low: null,
+    volume: null,
+    change: null,
+    changePercent: null,
+    sparkline: [],
     loadedAt: Date.now(),
-    demo: true,
+    asOf: "Unavailable",
+    source: "Stooq",
+    available: false,
   };
 }
 
@@ -551,6 +568,27 @@ function makeSparkline(open, close, high, low, symbol, range) {
 
 function createQuoteCard(quote) {
   const card = quoteTemplate.content.firstElementChild.cloneNode(true);
+  if (!quote.available) {
+    card.classList.add("unavailable");
+    card.style.setProperty("--accent", quote.accent);
+    card.querySelector(".quote-top p").textContent = quote.sector;
+    card.querySelector(".quote-top h3").textContent = quote.name;
+    card.querySelector(".quote-symbol").textContent = quote.symbol;
+    card.querySelector(".quote-price").textContent = "Unavailable";
+    const change = card.querySelector(".quote-change");
+    change.textContent = "Quote source did not return data";
+    card.querySelector('[data-field="open"]').textContent = "--";
+    card.querySelector('[data-field="high"]').textContent = "--";
+    card.querySelector('[data-field="low"]').textContent = "--";
+    card.querySelector('[data-field="volume"]').textContent = "--";
+    drawUnavailableChart(card.querySelector("canvas"));
+    card.querySelector(".card-open-button").addEventListener("click", (event) => {
+      event.stopPropagation();
+      openDetail(quote);
+    });
+    card.addEventListener("click", () => openDetail(quote));
+    return card;
+  }
   const isUp = quote.change >= 0;
   card.style.setProperty("--accent", quote.accent);
   card.querySelector(".quote-top p").textContent = quote.sector;
@@ -564,6 +602,10 @@ function createQuoteCard(quote) {
   card.querySelector('[data-field="high"]').textContent = money(quote.high);
   card.querySelector('[data-field="low"]').textContent = money(quote.low);
   card.querySelector('[data-field="volume"]').textContent = compactNumber(quote.volume);
+  const source = document.createElement("div");
+  source.className = "quote-source";
+  source.textContent = `${quote.source} / ${quote.asOf}`;
+  card.insertBefore(source, card.querySelector("canvas"));
   drawSparkline(card.querySelector("canvas"), quote.sparkline, quote.accent, isUp);
   card.querySelector(".card-open-button").addEventListener("click", (event) => {
     event.stopPropagation();
@@ -574,6 +616,22 @@ function createQuoteCard(quote) {
 }
 
 function openDetail(quote) {
+  if (!quote.available) {
+    detailSector.textContent = `${quote.symbol} / ${quote.sector}`;
+    detailName.textContent = quote.name;
+    detailPrice.textContent = "Unavailable";
+    detailChange.textContent = "No fetched quote";
+    detailChange.className = "down";
+    detailRange.textContent = activeRange;
+    detailStats.innerHTML = `
+      <div><span>Source</span><strong>${quote.source}</strong></div>
+      <div><span>Status</span><strong>Unavailable</strong></div>
+      <div><span>Accuracy</span><strong>No demo substitute</strong></div>
+    `;
+    drawUnavailableChart(detailChart);
+    if (!detailDialog.open) detailDialog.showModal();
+    return;
+  }
   const isUp = quote.change >= 0;
   detailSector.textContent = `${quote.symbol} / ${quote.sector}`;
   detailName.textContent = quote.name;
@@ -586,7 +644,8 @@ function openDetail(quote) {
     <div><span>High</span><strong>${money(quote.high)}</strong></div>
     <div><span>Low</span><strong>${money(quote.low)}</strong></div>
     <div><span>Volume</span><strong>${compactNumber(quote.volume)}</strong></div>
-    <div><span>Data</span><strong>${quote.demo ? "Demo fallback" : "Live quote"}</strong></div>
+    <div><span>Source</span><strong>${quote.source}</strong></div>
+    <div><span>Quote Time</span><strong>${quote.asOf}</strong></div>
     <div><span>Watchlist</span><strong>${selected.has(quote.symbol) ? "Saved" : "Not saved"}</strong></div>
   `;
   drawSparkline(detailChart, quote.sparkline, quote.accent, isUp);
@@ -631,6 +690,28 @@ function drawSparkline(canvas, points, accent, isUp) {
   context.shadowColor = accent;
   context.stroke();
   context.shadowBlur = 0;
+}
+
+function drawUnavailableChart(canvas) {
+  const context = canvas.getContext("2d");
+  const { width, height } = canvas;
+  context.clearRect(0, 0, width, height);
+  context.fillStyle = "rgba(255,255,255,0.04)";
+  context.fillRect(0, 0, width, height);
+  context.strokeStyle = "rgba(255,255,255,0.14)";
+  context.lineWidth = 2;
+  context.setLineDash([8, 8]);
+  context.beginPath();
+  context.moveTo(18, height / 2);
+  context.lineTo(width - 18, height / 2);
+  context.stroke();
+  context.setLineDash([]);
+  context.fillStyle = "#91a1bd";
+  context.font = "800 16px system-ui";
+  context.textAlign = "center";
+  context.fillText("Quote unavailable", width / 2, height / 2 - 14);
+  context.font = "700 12px system-ui";
+  context.fillText("No generated market data shown", width / 2, height / 2 + 12);
 }
 
 function drawCompareChart(canvas, rows) {
@@ -678,6 +759,11 @@ function compactNumber(value) {
     notation: "compact",
     maximumFractionDigits: 1,
   }).format(value);
+}
+
+function formatQuoteTimestamp(date, time) {
+  if (!date && !time) return "Timestamp unavailable";
+  return [date, time].filter(Boolean).join(" ");
 }
 
 function clamp(value, min, max) {
