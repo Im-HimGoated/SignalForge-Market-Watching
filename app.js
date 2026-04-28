@@ -492,13 +492,42 @@ function createCompareSummary(rows, movePercent, amount) {
 }
 
 async function fetchStooqQuote(company) {
-  const url = `https://stooq.com/q/l/?s=${company.stooq}&f=sd2t2ohlcv&h&e=csv`;
-  const response = await fetch(url);
-  if (!response.ok) throw new Error("Quote request failed");
-  const csv = await response.text();
+  const stooqUrl = `https://stooq.com/q/l/?s=${company.stooq}&f=sd2t2ohlcv&h&e=csv`;
+  const directSource = { url: stooqUrl, label: "Stooq" };
+  const bridgeSource = { url: `https://cors.eu.org/${stooqUrl}`, label: "Stooq via CORS bridge" };
+  const { csv, source } = await fetchQuoteCsv([directSource, bridgeSource]);
+  return parseStooqQuote(company, csv, source);
+}
+
+async function fetchQuoteCsv(sources) {
+  let lastError = null;
+  for (const source of sources) {
+    try {
+      const response = await fetchWithTimeout(source.url, 7000);
+      if (!response.ok) throw new Error(`Quote request failed: ${response.status}`);
+      const csv = await response.text();
+      return { csv, source: source.label };
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError || new Error("Quote request failed");
+}
+
+async function fetchWithTimeout(url, timeoutMs) {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { signal: controller.signal });
+  } finally {
+    window.clearTimeout(timeout);
+  }
+}
+
+function parseStooqQuote(company, csv, source) {
   const [headerLine, valueLine] = csv.trim().split("\n");
-  const headers = headerLine.split(",");
-  const values = valueLine.split(",");
+  const headers = headerLine.split(",").map((item) => item.trim());
+  const values = valueLine.split(",").map((item) => item.trim());
   const row = Object.fromEntries(headers.map((header, index) => [header.toLowerCase(), values[index]]));
   const close = Number(row.close);
   const open = Number(row.open);
@@ -521,7 +550,7 @@ async function fetchStooqQuote(company) {
     sparkline: makeSparkline(open, close, high, low, company.symbol, activeRange),
     loadedAt: Date.now(),
     asOf: formatQuoteTimestamp(row.date, row.time),
-    source: "Stooq",
+    source,
     available: true,
   };
 }
