@@ -1,0 +1,353 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Neon Market Watch</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body class="home-active">
+    <section class="home-screen" id="homeScreen">
+      <div class="home-visual" aria-hidden="true">
+        <span></span>
+        <span></span>
+        <span></span>
+      </div>
+      <div class="home-content">
+        <p class="eyebrow">Neon Market Console</p>
+        <h1>Explore price signals and stock scenarios.</h1>
+        <p>
+          Track live company quotes, then run clean what-if scenarios for portions,
+          dollar amounts, and possible price moves.
+        </p>
+        <div class="home-actions">
+          <button class="home-card" type="button" data-open-view="market">
+            <span>01</span>
+            <strong>Market Watch</strong>
+            <small>Live/demo quotes, charts, ranges, and company details.</small>
+          </button>
+          <button class="home-card" type="button" data-open-view="scenario">
+            <span>02</span>
+            <strong>Scenario Lab</strong>
+            <small>Estimate portion cost, gains, losses, and AI-style summaries.</small>
+          </button>
+          <button class="home-card" type="button" data-open-view="compare">
+            <span>03</span>
+            <strong>Compare Lab</strong>
+            <small>Compare selected companies by price move, risk, and relative signal.</small>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="brand-sigil" aria-hidden="true"></div>
+          <div>
+            <p>Neon Market</p>
+            <h1>Watch</h1>
+          </div>
+        </div>
+
+        <nav class="app-nav" aria-label="App views">
+          <button class="nav-button" type="button" data-view="home">Home</button>
+          <button class="nav-button active" type="button" data-view="market">Market Watch</button>
+          <button class="nav-button" type="button" data-view="scenario">Scenario Lab</button>
+          <button class="nav-button" type="button" data-view="compare">Compare Lab</button>
+        </nav>
+
+        <label class="search-box">
+          <span>Search</span>
+          <input id="companySearch" type="search" placeholder="Apple, Tesla, NVDA..." autocomplete="off" />
+        </label>
+
+        <div class="company-list" id="companyList" aria-label="Companies"></div>
+      </aside>
+
+      <main class="dashboard">
+        <section class="app-view active-view" id="marketView">
+          <header class="dashboard-header">
+            <div>
+              <p class="eyebrow">Live stock console</p>
+              <h2>Signal Board</h2>
+            </div>
+            <div class="header-actions">
+              <button class="ghost-button" id="clearButton" type="button">Clear</button>
+              <button class="primary-button" id="refreshButton" type="button">Refresh</button>
+            </div>
+          </header>
+
+          <section class="range-panel" aria-label="Chart time range">
+            <span>Chart Range</span>
+            <div class="range-controls" id="rangeControls">
+              <button class="range-button active" type="button" data-range="1D">1D</button>
+              <button class="range-button" type="button" data-range="5D">5D</button>
+              <button class="range-button" type="button" data-range="1M">1M</button>
+              <button class="range-button" type="button" data-range="6M">6M</button>
+              <button class="range-button" type="button" data-range="1Y">1Y</button>
+            </div>
+          </section>
+
+          <section class="market-strip" aria-label="Selected market summary">
+            <div>
+              <span>Selected</span>
+              <strong id="selectedCount">0</strong>
+            </div>
+            <div>
+              <span>Advancing</span>
+              <strong id="upCount">0</strong>
+            </div>
+            <div>
+              <span>Declining</span>
+              <strong id="downCount">0</strong>
+            </div>
+            <div>
+              <span>Status</span>
+              <strong id="dataStatus">Idle</strong>
+            </div>
+          </section>
+
+          <section class="quote-grid" id="quoteGrid" aria-live="polite"></section>
+        </section>
+
+        <section class="app-view scenario-view" id="scenarioView">
+          <header class="dashboard-header">
+            <div>
+              <p class="eyebrow">Scenario engine</p>
+              <h2>Scenario Lab</h2>
+            </div>
+            <button class="primary-button" id="runScenarioButton" type="button">Run Scenario</button>
+          </header>
+
+          <section class="scenario-layout">
+            <form class="scenario-panel" id="scenarioForm">
+              <label>
+                <span>Company</span>
+                <select id="scenarioCompany"></select>
+              </label>
+              <label>
+                <span>Dollar amount to model</span>
+                <input id="scenarioAmount" type="number" min="1" step="50" value="1000" />
+              </label>
+              <label>
+                <span>Portion size</span>
+                <input id="scenarioPortion" type="number" min="0.001" step="0.01" value="1" />
+              </label>
+              <label>
+                <span>Projected move</span>
+                <input id="scenarioMove" type="range" min="-40" max="40" step="1" value="8" />
+                <strong id="scenarioMoveLabel">+8%</strong>
+              </label>
+              <div class="preset-grid" id="scenarioPresets" aria-label="Scenario presets">
+                <button type="button" data-preset="3">Conservative</button>
+                <button type="button" data-preset="15">Bull Case</button>
+                <button type="button" data-preset="-15">Bear Case</button>
+                <button type="button" data-preset="-30">Shock</button>
+              </div>
+              <label>
+                <span>Timeframe</span>
+                <select id="scenarioTimeframe">
+                  <option>1 week</option>
+                  <option selected>1 month</option>
+                  <option>6 months</option>
+                  <option>1 year</option>
+                </select>
+              </label>
+            </form>
+
+            <section class="scenario-results">
+              <div class="result-grid">
+                <div>
+                  <span>Current Price</span>
+                  <strong id="scenarioPrice">$0.00</strong>
+                </div>
+                <div>
+                  <span>Portion Cost</span>
+                  <strong id="scenarioPortionCost">$0.00</strong>
+                </div>
+                <div>
+                  <span>Estimated Units</span>
+                  <strong id="scenarioUnits">0.00</strong>
+                </div>
+                <div>
+                  <span>Scenario Value</span>
+                  <strong id="scenarioValue">$0.00</strong>
+                </div>
+                <div>
+                  <span>Gain / Loss</span>
+                  <strong id="scenarioGain">$0.00</strong>
+                </div>
+                <div>
+                  <span>Projected Price</span>
+                  <strong id="scenarioProjectedPrice">$0.00</strong>
+                </div>
+              </div>
+              <article class="risk-meter" id="riskMeter">
+                <div>
+                  <span>Risk Meter</span>
+                  <strong id="riskLabel">Moderate</strong>
+                </div>
+                <div class="risk-track">
+                  <span id="riskFill"></span>
+                </div>
+                <p id="riskReason">Run a scenario to estimate risk.</p>
+              </article>
+              <article class="outcome-range">
+                <div class="panel-heading">
+                  <div>
+                    <span>Best / Worst Range</span>
+                    <strong>Outcome band</strong>
+                  </div>
+                  <button class="ghost-button compact-button" id="saveScenarioButton" type="button">Save Scenario</button>
+                </div>
+                <div class="outcome-grid" id="outcomeGrid"></div>
+              </article>
+              <article class="ai-summary">
+                <span>AI Analyst</span>
+                <p id="aiSummary">Choose a company and run a scenario.</p>
+              </article>
+            </section>
+          </section>
+          <section class="history-panel">
+            <div class="panel-heading">
+              <div>
+                <span>Saved Scenario History</span>
+                <strong>Planning log</strong>
+              </div>
+              <button class="ghost-button compact-button" id="clearHistoryButton" type="button">Clear History</button>
+            </div>
+            <div class="history-list" id="historyList"></div>
+          </section>
+        </section>
+
+        <section class="app-view compare-view" id="compareView">
+          <header class="dashboard-header">
+            <div>
+              <p class="eyebrow">Relative signal</p>
+              <h2>Compare Lab</h2>
+            </div>
+            <button class="primary-button" id="runCompareButton" type="button">Compare</button>
+          </header>
+
+          <section class="compare-layout">
+            <form class="compare-panel" id="compareForm">
+              <label class="wide-field">
+                <span>Companies</span>
+                <select id="compareCompanies" multiple size="6"></select>
+              </label>
+              <label>
+                <span>Modeled amount per company</span>
+                <input id="compareAmount" type="number" min="1" step="100" value="1000" />
+              </label>
+              <label>
+                <span>Comparison move</span>
+                <input id="compareMove" type="range" min="-35" max="35" step="1" value="10" />
+                <strong id="compareMoveLabel">+10%</strong>
+              </label>
+            </form>
+
+            <section class="compare-results">
+              <div class="compare-summary-strip">
+                <div>
+                  <span>Compared</span>
+                  <strong id="compareCount">0</strong>
+                </div>
+                <div>
+                  <span>Top Signal</span>
+                  <strong id="compareLeader">--</strong>
+                </div>
+                <div>
+                  <span>Avg Risk</span>
+                  <strong id="compareAverageRisk">0/100</strong>
+                </div>
+              </div>
+              <div class="compare-chart-panel">
+                <canvas id="compareChart" width="900" height="260"></canvas>
+              </div>
+              <div class="compare-grid" id="compareGrid"></div>
+              <article class="ai-summary compare-ai">
+                <span>Compare AI</span>
+                <p id="compareSummary">Select two or more companies to compare.</p>
+              </article>
+            </section>
+          </section>
+        </section>
+      </main>
+    </div>
+
+    <dialog class="detail-dialog" id="detailDialog">
+      <article class="detail-panel">
+        <header>
+          <div>
+            <p class="eyebrow" id="detailSector">Company</p>
+            <h2 id="detailName">Stock</h2>
+          </div>
+          <button class="ghost-button" id="detailCloseButton" type="button">Close</button>
+        </header>
+        <div class="detail-price-row">
+          <div>
+            <span>Current Price</span>
+            <strong id="detailPrice">$0.00</strong>
+          </div>
+          <div>
+            <span>Move</span>
+            <strong id="detailChange">$0.00</strong>
+          </div>
+          <div>
+            <span>Range</span>
+            <strong id="detailRange">1D</strong>
+          </div>
+        </div>
+        <canvas id="detailChart" width="900" height="260"></canvas>
+        <div class="detail-stats" id="detailStats"></div>
+      </article>
+    </dialog>
+
+    <template id="companyButtonTemplate">
+      <button class="company-button" type="button">
+        <span>
+          <strong></strong>
+          <small></small>
+        </span>
+        <em></em>
+      </button>
+    </template>
+
+    <template id="quoteCardTemplate">
+      <article class="quote-card">
+        <div class="quote-top">
+          <div>
+            <p></p>
+            <h3></h3>
+          </div>
+          <span class="quote-symbol"></span>
+        </div>
+        <div class="quote-price"></div>
+        <div class="quote-change"></div>
+        <button class="card-open-button" type="button">View Details</button>
+        <canvas width="320" height="110"></canvas>
+        <dl>
+          <div>
+            <dt>Open</dt>
+            <dd data-field="open"></dd>
+          </div>
+          <div>
+            <dt>High</dt>
+            <dd data-field="high"></dd>
+          </div>
+          <div>
+            <dt>Low</dt>
+            <dd data-field="low"></dd>
+          </div>
+          <div>
+            <dt>Volume</dt>
+            <dd data-field="volume"></dd>
+          </div>
+        </dl>
+      </article>
+    </template>
+
+    <script src="app.js"></script>
+  </body>
+</html>
